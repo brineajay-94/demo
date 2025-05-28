@@ -1,0 +1,419 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>J-Hope Chat Admin Panel</title>
+  <style>
+    * {
+      margin: 0;
+      padding: 0;
+      box-sizing: border-box;
+    }
+
+    body {
+      font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+      background: linear-gradient(135deg, #1e1e2f, #2c2c54);
+      color: #ffffff;
+      min-height: 100vh;
+      display: flex;
+      justify-content: center;
+      align-items: center;
+      padding: 20px;
+    }
+
+    .admin-container {
+      background: rgba(255, 255, 255, 0.1);
+      backdrop-filter: blur(15px);
+      border-radius: 20px;
+      padding: 30px;
+      width: 100%;
+      max-width: 1200px;
+      box-shadow: 0 8px 32px rgba(0, 0, 0, 0.3);
+      border: 1px solid rgba(255, 255, 255, 0.2);
+    }
+
+    .header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      margin-bottom: 30px;
+    }
+
+    .header h1 {
+      font-size: 2rem;
+      color: #ffffff;
+    }
+
+    .bulk-actions {
+      display: flex;
+      gap: 10px;
+    }
+
+    .bulk-actions button {
+      background: linear-gradient(45deg, #ff4b4b, #ff7676);
+      border: none;
+      padding: 10px 20px;
+      border-radius: 8px;
+      color: white;
+      font-weight: bold;
+      cursor: pointer;
+      transition: transform 0.2s, box-shadow 0.2s;
+    }
+
+    .bulk-actions button:hover {
+      transform: translateY(-2px);
+      box-shadow: 0 4px 12px rgba(255, 75, 75, 0.5);
+    }
+
+    .chat-list {
+      max-height: 60vh;
+      overflow-y: auto;
+      padding-right: 10px;
+    }
+
+    .chat-item {
+      background: rgba(255, 255, 255, 0.15);
+      border-radius: 12px;
+      padding: 15px;
+      margin-bottom: 15px;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      transition: background 0.2s;
+    }
+
+    .chat-item:hover {
+      background: rgba(255, 255, 255, 0.25);
+    }
+
+    .chat-content {
+      flex: 1;
+    }
+
+    .chat-content .username {
+      font-weight: bold;
+      font-size: 1.1rem;
+      color: #ffffff;
+    }
+
+    .chat-content .text {
+      font-size: 0.95rem;
+      color: #e0e0e0;
+      margin: 5px 0;
+    }
+
+    .chat-content .images {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 10px;
+      margin-top: 10px;
+    }
+
+    .chat-content img {
+      max-width: 100px;
+      border-radius: 8px;
+      object-fit: cover;
+    }
+
+    .chat-content .timestamp {
+      font-size: 0.8rem;
+      color: #b0b0b0;
+    }
+
+    .chat-actions button {
+      background: none;
+      border: none;
+      color: #ff4b4b;
+      font-size: 1.2rem;
+      cursor: pointer;
+      margin-left: 10px;
+      transition: color 0.2s;
+    }
+
+    .chat-actions button:hover {
+      color: #ff7676;
+    }
+
+    .modal {
+      display: none;
+      position: fixed;
+      top: 0;
+      left: 0;
+      width: 100%;
+      height: 100%;
+      background: rgba(0, 0, 0, 0.7);
+      justify-content: center;
+      align-items: center;
+      z-index: 1000;
+    }
+
+    .modal-content {
+      background: #2c2c54;
+      border-radius: 12px;
+      padding: 20px;
+      text-align: center;
+      max-width: 400px;
+      width: 90%;
+    }
+
+    .modal-content p {
+      margin-bottom: 20px;
+      font-size: 1.1rem;
+    }
+
+    .modal-content button {
+      padding: 10px 20px;
+      border: none;
+      border-radius: 8px;
+      cursor: pointer;
+      font-weight: bold;
+      margin: 0 10px;
+    }
+
+    .modal-content .confirm {
+      background: #ff4b4b;
+      color: white;
+    }
+
+    .modal-content .cancel {
+      background: #555;
+      color: white;
+    }
+
+    .chat-list::-webkit-scrollbar {
+      width: 8px;
+    }
+
+    .chat-list::-webkit-scrollbar-track {
+      background: rgba(255, 255, 255, 0.1);
+      border-radius: 4px;
+    }
+
+    .chat-list::-webkit-scrollbar-thumb {
+      background: #ff7676;
+      border-radius: 4px;
+    }
+
+    @media (max-width: 768px) {
+      .admin-container {
+        padding: 20px;
+      }
+
+      .header h1 {
+        font-size: 1.5rem;
+      }
+
+      .bulk-actions button {
+        padding: 8px 15px;
+        font-size: 0.9rem;
+      }
+
+      .chat-content img {
+        max-width: 80px;
+      }
+    }
+  </style>
+</head>
+<body>
+  <div class="admin-container">
+    <div class="header">
+      <h1>J-Hope Chat Admin Panel</h1>
+      <div class="bulk-actions">
+        <button onclick="window.showModal('deleteAllMessages')">Delete All Messages</button>
+        <button onclick="window.showModal('deleteAllImages')">Delete All Images</button>
+      </div>
+    </div>
+    <div class="chat-list" id="chatList"></div>
+  </div>
+
+  <div class="modal" id="confirmModal">
+    <div class="modal-content">
+      <p id="modalMessage"></p>
+      <button class="confirm" id="confirmButton">Confirm</button>
+      <button class="cancel" onclick="window.closeModal()">Cancel</button>
+    </div>
+  </div>
+
+  <script type="module">
+    import { initializeApp } from "https://www.gstatic.com/firebasejs/11.7.3/firebase-app.js";
+    import { getDatabase, ref, onValue, remove, get } from "https://www.gstatic.com/firebasejs/11.7.3/firebase-database.js";
+
+    const firebaseConfig = {
+      apiKey: "AIzaSyBzVL3wQTFo74QlM_PEE-EbgFEtbqN16oE",
+      authDomain: "signin-cdeed.firebaseapp.com",
+      projectId: "signin-cdeed",
+      storageBucket: "signin-cdeed.appspot.com",
+      messagingSenderId: "481847681739",
+      appId: "1:481847681739:web:13b28ef686bc29f201714e"
+    };
+
+    const app = initializeApp(firebaseConfig);
+    const db = getDatabase(app);
+    const chatRef = ref(db, "messages");
+
+    const supabaseUrl = "https://jxfwqcvdmvepfnrfauoe.supabase.co";
+    const supabaseKey = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Imp4ZndxY3ZkbXZlcGZucmZhdW9lIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NDc0NDEzNDEsImV4cCI6MjA2MzAxNzM0MX0.JVZdY8iz_fk2KkiufoYbL49VHtblRq5OhA6pPMonWyY";
+
+    // Load messages
+    function loadMessages() {
+      onValue(chatRef, (snapshot) => {
+        const chatList = document.getElementById("chatList");
+        chatList.innerHTML = "";
+        const messages = snapshot.val();
+        if (!messages) {
+          chatList.innerHTML = "<p>No messages found.</p>";
+          return;
+        }
+
+        Object.entries(messages).forEach(([key, msg]) => {
+          const item = document.createElement("div");
+          item.className = "chat-item";
+
+          const content = document.createElement("div");
+          content.className = "chat-content";
+          content.innerHTML = `
+            <div class="username">${msg.name}</div>
+            ${msg.text ? `<div class="text">${msg.text}</div>` : ""}
+            ${msg.images ? `
+              <div class="images">
+                ${msg.images.map(url => `<img src="${url}" alt="Chat image">`).join("")}
+              </div>
+            ` : ""}
+            <div class="timestamp">${new Date(msg.timestamp).toLocaleString()}</div>
+          `;
+
+          const actions = document.createElement("div");
+          actions.className = "chat-actions";
+          actions.innerHTML = `
+            <button onclick="window.deleteMessage('${key}')">🗑️</button>
+            ${msg.images ? `<button onclick="window.deleteImages('${key}', ${JSON.stringify(msg.images)})">🖼️</button>` : ""}
+          `;
+
+          item.appendChild(content);
+          item.appendChild(actions);
+          chatList.appendChild(item);
+        });
+      });
+    }
+
+    // Delete specific message
+    window.deleteMessage = async function (key) {
+      if (confirm("Are you sure you want to delete this message?")) {
+        try {
+          await remove(ref(db, `messages/${key}`));
+          showToast("Message deleted successfully.");
+        } catch (error) {
+          showToast("Error deleting message: " + error.message, true);
+        }
+      }
+    };
+
+    // Delete specific images
+    window.deleteImages = async function (key, images) {
+      if (confirm("Are you sure you want to delete these images?")) {
+        try {
+          for (const url of images) {
+            const filePath = url.split("photosandvideos/")[1];
+            await fetch(`${supabaseUrl}/storage/v1/object/photosandvideos/${filePath}`, {
+              method: "DELETE",
+              headers: {
+                Authorization: `Bearer ${supabaseKey}`,
+              },
+            });
+          }
+
+          await remove(ref(db, `messages/${key}/images`));
+          showToast("Images deleted successfully.");
+        } catch (error) {
+          showToast("Error deleting images: " + error.message, true);
+        }
+      }
+    };
+
+    // Delete all messages
+    async function deleteAllMessages() {
+      try {
+        await remove(chatRef);
+        showToast("All messages deleted successfully.");
+      } catch (error) {
+        showToast("Error deleting all messages: " + error.message, true);
+      }
+    }
+
+    // Delete all images
+    async function deleteAllImages() {
+      try {
+        const snapshot = await get(chatRef);
+        const messages = snapshot.val();
+        if (!messages) return;
+
+        for (const [key, msg] of Object.entries(messages)) {
+          if (msg.images) {
+            for (const url of msg.images) {
+              const filePath = url.split("photosandvideos/")[1];
+              await fetch(`${supabaseUrl}/storage/v1/object/photosandvideos/${filePath}`, {
+                method: "DELETE",
+                headers: {
+                  Authorization: `Bearer ${supabaseKey}`,
+                },
+              });
+            }
+            await remove(ref(db, `messages/${key}/images`));
+          }
+        }
+        showToast("All images deleted successfully.");
+      } catch (error) {
+        showToast("Error deleting all images: " + error.message, true);
+      }
+    }
+
+    // Modal handling
+    window.showModal = function (action) {
+      const modal = document.getElementById("confirmModal");
+      const message = document.getElementById("modalMessage");
+      const confirmButton = document.getElementById("confirmButton");
+
+      if (action === "deleteAllMessages") {
+        message.textContent = "Are you sure you want to delete all messages? This cannot be undone.";
+        confirmButton.onclick = () => {
+          deleteAllMessages();
+          closeModal();
+        };
+      } else if (action === "deleteAllImages") {
+        message.textContent = "Are you sure you want to delete all images? This cannot be undone.";
+        confirmButton.onclick = () => {
+          deleteAllImages();
+          closeModal();
+        };
+      }
+
+      modal.style.display = "flex";
+    };
+
+    window.closeModal = function () {
+      document.getElementById("confirmModal").style.display = "none";
+    };
+
+    // Toast notification
+    function showToast(message, isError = false) {
+      const toast = document.createElement("div");
+      toast.style.position = "fixed";
+      toast.style.bottom = "20px";
+      toast.style.right = "20px";
+      toast.style.padding = "10px 20px";
+      toast.style.background = isError ? "#ff4b4b" : "#4caf50";
+      toast.style.color = "white";
+      toast.style.borderRadius = "8px";
+      toast.style.boxShadow = "0 4px 12px rgba(0,0,0,0.3)";
+      toast.textContent = message;
+
+      document.body.appendChild(toast);
+      setTimeout(() => toast.remove(), 3000);
+    }
+
+    // Initialize
+    loadMessages();
+  </script>
+</body>
+</html>

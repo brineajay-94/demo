@@ -1,0 +1,221 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Admin - Manage Notifications</title>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0-beta3/css/all.min.css">
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            margin: 0;
+            padding: 0;
+            background-color: #f5f8f3;
+        }
+
+        .return-arrow {
+            position: fixed;
+            top: 20px;
+            left: 20px;
+            font-size: 30px;
+            cursor: pointer;
+            color: #1c2a44;
+            z-index: 10; /* Ensure the arrow stays above other content */
+        }
+
+        .return-arrow:hover {
+            color: #243e6d;
+        }
+
+        .form-container {
+            margin: 50px 20px 20px 20px; /* Adjust margin to make room for the arrow */
+            padding: 20px;
+            background-color: white;
+            border-radius: 10px;
+            box-shadow: 2px 2px 8px rgba(0, 0, 0, 0.1);
+        }
+
+        .form-container input, .form-container button {
+            padding: 10px;
+            margin-bottom: 15px;
+            width: 100%;
+            border-radius: 5px;
+            border: 1px solid #ccc;
+        }
+
+        .form-container button {
+            background-color: #1c2a44;
+            color: white;
+            cursor: pointer;
+        }
+
+        .form-container button:hover {
+            background-color: #243e6d;
+        }
+
+        .notification-list {
+            margin-top: 30px;
+        }
+
+        .notification-item {
+            margin-bottom: 10px;
+            padding: 10px;
+            background-color: #f1f1f1;
+            border-radius: 5px;
+            box-shadow: 2px 2px 8px rgba(0, 0, 0, 0.1);
+        }
+
+        .notification-item p {
+            margin: 0;
+        }
+
+        .action-buttons {
+            margin-top: 10px;
+            display: flex;
+            gap: 10px;
+        }
+
+        .action-buttons button {
+            padding: 5px 10px;
+            cursor: pointer;
+            border-radius: 5px;
+            border: 1px solid #ccc;
+        }
+
+        .edit-btn {
+            background-color: #ff9800;
+            color: white;
+        }
+
+        .delete-btn {
+            background-color: #f44336;
+            color: white;
+        }
+    </style>
+</head>
+<body>
+
+    <div class="return-arrow" onclick="window.location.href='dash.html'">
+        <i class="fas fa-arrow-left"></i>
+    </div>
+
+    <div class="form-container">
+        <h2>Send Notification</h2>
+        <form id="notificationForm">
+            <input type="text" id="notificationMessage" placeholder="Enter notification message" required>
+            <button type="submit">Send Notification</button>
+        </form>
+    </div>
+
+    <div class="notification-list" id="notificationList">
+        <h2>Existing Notifications</h2>
+        <!-- Notifications will be dynamically loaded here -->
+    </div>
+
+    <!-- Firebase CDN (using Firebase 9+ modular SDK) -->
+    <script type="module">
+        // Import necessary Firebase SDKs
+        import { initializeApp } from 'https://www.gstatic.com/firebasejs/9.6.1/firebase-app.js';
+        import { getFirestore, collection, getDocs, addDoc, doc, updateDoc, deleteDoc } from 'https://www.gstatic.com/firebasejs/9.6.1/firebase-firestore.js';
+
+        // Firebase configuration
+        const firebaseConfig = {
+            apiKey: "AIzaSyAanJ9JJ7wNfha2vX2k0slZF6qcfxNERj0",
+            authDomain: "canvas-55c31.firebaseapp.com",
+            projectId: "canvas-55c31",
+            storageBucket: "canvas-55c31.firebasestorage.app",
+            messagingSenderId: "744324241059",
+            appId: "1:744324241059:web:4914e76d1436bcfc659116",
+            measurementId: "G-NTK4L0L5P8"
+        };
+
+        // Initialize Firebase
+        const app = initializeApp(firebaseConfig);
+
+        // Get Firestore instance
+        const db = getFirestore(app);
+
+        // Function to get existing notifications from Firestore
+        async function getNotifications() {
+            const querySnapshot = await getDocs(collection(db, "notifications"));
+            const notificationList = document.getElementById('notificationList');
+
+            notificationList.innerHTML = ''; // Clear existing notifications
+
+            querySnapshot.forEach((doc) => {
+                const notification = doc.data();
+                const notificationId = doc.id;
+
+                const div = document.createElement('div');
+                div.classList.add('notification-item');
+                div.innerHTML = `
+                    <p>${notification.message}</p>
+                    <div class="action-buttons">
+                        <button class="edit-btn" onclick="editNotification('${notificationId}', '${notification.message}')">Edit</button>
+                        <button class="delete-btn" onclick="deleteNotification('${notificationId}')">Delete</button>
+                    </div>
+                `;
+                notificationList.appendChild(div);
+            });
+        }
+
+        // Function to send a new notification to Firestore
+        const notificationForm = document.getElementById('notificationForm');
+        const notificationMessage = document.getElementById('notificationMessage');
+
+        notificationForm.addEventListener('submit', async (event) => {
+            event.preventDefault();
+
+            const message = notificationMessage.value;
+            try {
+                await addDoc(collection(db, "notifications"), {
+                    message: message,
+                    timestamp: new Date()
+                });
+                alert('Notification sent successfully!');
+                notificationMessage.value = '';  // Clear the input
+                getNotifications();  // Refresh the notification list
+            } catch (e) {
+                console.error("Error adding document: ", e);
+                alert('Error sending notification.');
+            }
+        });
+
+        // Function to edit a notification
+        window.editNotification = function (id, currentMessage) {
+            const newMessage = prompt("Edit Notification", currentMessage);
+            if (newMessage && newMessage !== currentMessage) {
+                const notificationRef = doc(db, "notifications", id);
+                updateDoc(notificationRef, {
+                    message: newMessage
+                })
+                .then(() => {
+                    alert('Notification updated!');
+                    getNotifications();  // Refresh the notification list
+                })
+                .catch((error) => {
+                    console.error("Error updating document: ", error);
+                    alert('Error updating notification.');
+                });
+            }
+        };
+
+        // Function to delete a notification
+        window.deleteNotification = function (id) {
+            const notificationRef = doc(db, "notifications", id);
+            deleteDoc(notificationRef)
+                .then(() => {
+                    alert('Notification deleted!');
+                    getNotifications();  // Refresh the notification list
+                })
+                .catch((error) => {
+                    console.error("Error deleting document: ", error);
+                    alert('Error deleting notification.');
+                });
+        };
+
+        // Load notifications when the page is loaded
+        getNotifications();
+    </script>
+</body>
+</html>

@@ -1,0 +1,340 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Admin - Manage Advertisement</title>
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0-beta3/css/all.min.css"/>
+  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+  <style>
+    body {
+      font-family: Arial, sans-serif;
+      margin: 0;
+      padding: 0;
+      background-color: #f5f8f3;
+      display: flex;
+      justify-content: center;
+      align-items: center;
+      min-height: 100vh;
+    }
+
+    .container {
+      background: white;
+      padding: 20px;
+      border-radius: 10px;
+      box-shadow: 2px 2px 10px rgba(0, 0, 0, 0.1);
+      width: 100%;
+      max-width: 500px;
+      text-align: center;
+    }
+
+    h2 {
+      font-size: 24px;
+      margin-bottom: 20px;
+      color: #1c2a44;
+    }
+
+    .form-group {
+      margin-bottom: 15px;
+      text-align: left;
+    }
+
+    .form-group label {
+      display: block;
+      margin-bottom: 5px;
+      font-size: 14px;
+      color: #333;
+    }
+
+    .form-group input[type="text"],
+    .form-group input[type="file"] {
+      width: 100%;
+      padding: 10px;
+      border-radius: 5px;
+      border: 1px solid #ccc;
+      outline: none;
+    }
+
+    .form-group input[type="file"] {
+      padding: 5px;
+    }
+
+    .button-group {
+      display: flex;
+      gap: 10px;
+      justify-content: center;
+    }
+
+    button {
+      background-color: #1c2a44;
+      color: white;
+      padding: 10px 20px;
+      border: none;
+      border-radius: 5px;
+      cursor: pointer;
+      font-size: 16px;
+    }
+
+    button.delete {
+      background-color: #d32f2f;
+    }
+
+    button:hover {
+      background-color: #66bb6a;
+    }
+
+    button.delete:hover {
+      background-color: #b71c1c;
+    }
+
+    .preview {
+      margin-top: 20px;
+    }
+
+    .preview img {
+      max-width: 100%;
+      height: 80px;
+      border-radius: 5px;
+      margin-top: 10px;
+    }
+
+    .error {
+      color: red;
+      font-size: 14px;
+      margin-top: 10px;
+    }
+
+    .success {
+      color: green;
+      font-size: 14px;
+      margin-top: 10px;
+    }
+  </style>
+</head>
+<body>
+
+<div class="container">
+  <h2>Manage Advertisement</h2>
+  <div class="form-group">
+    <label for="adText">Advertisement Text</label>
+    <input type="text" id="adText" placeholder="Enter advertisement text">
+  </div>
+  <div class="form-group">
+    <label for="adImage">Advertisement Image</label>
+    <input type="file" id="adImage" accept="image/*">
+  </div>
+  <div class="button-group">
+    <button onclick="uploadAdvertisement()">Upload Advertisement</button>
+    <button class="delete" onclick="deleteAdvertisement()">Delete Advertisement</button>
+  </div>
+  <div class="preview">
+    <h3>Preview</h3>
+    <img id="previewImage" src="default-ad.png" alt="Preview">
+    <p id="previewText">Default Advertisement</p>
+  </div>
+  <p id="statusMessage" class="error"></p>
+</div>
+
+<!-- Firebase and Supabase SDKs -->
+<script type="module">
+  import { initializeApp } from "https://www.gstatic.com/firebasejs/11.7.3/firebase-app.js";
+  import { getAnalytics } from "https://www.gstatic.com/firebasejs/11.7.3/firebase-analytics.js";
+  import { getFirestore, doc, setDoc, deleteDoc, getDoc } from "https://www.gstatic.com/firebasejs/11.7.3/firebase-firestore.js";
+  import { getAuth, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/11.7.3/firebase-auth.js";
+  import { createClient } from "https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/+esm";
+
+  // Firebase Configuration
+  const firebaseConfig = {
+    apiKey: "AIzaSyBzVL3wQTFo74QlM_PEE-EbgFEtbqN16oE",
+    authDomain: "signin-cdeed.firebaseapp.com",
+    projectId: "signin-cdeed",
+    storageBucket: "signin-cdeed.firebasestorage.app",
+    messagingSenderId: "481847681739",
+    appId: "1:481847681739:web:13b28ef686bc29f201714e",
+    measurementId: "G-L8F15D37BE"
+  };
+
+  // Supabase Configuration
+  const supabaseUrl = "https://jxfwqcvdmvepfnrfauoe.supabase.co";
+  const supabaseKey = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Imp4ZndxY3ZkbXZlcGZucmZhdW9lIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NDc0NDEzNDEsImV4cCI6MjA2MzAxNzM0MX0.JVZdY8iz_fk2KkiufoYbL49VHtblRq5OhA6pPMonWyY";
+  const supabase = createClient(supabaseUrl, supabaseKey);
+
+  const app = initializeApp(firebaseConfig);
+  const analytics = getAnalytics(app);
+  const db = getFirestore(app);
+  const auth = getAuth(app);
+
+  const adTextInput = document.getElementById('adText');
+  const adImageInput = document.getElementById('adImage');
+  const previewImage = document.getElementById('previewImage');
+  const previewText = document.getElementById('previewText');
+  const statusMessage = document.getElementById('statusMessage');
+
+  // Load current advertisement for preview
+  async function loadCurrentAd() {
+    try {
+      const adDocRef = doc(db, 'advertisements', 'currentAd');
+      const adDoc = await getDoc(adDocRef);
+      if (adDoc.exists()) {
+        const adData = adDoc.data();
+        previewImage.src = adData.imageUrl || "default-ad.png";
+        previewText.textContent = adData.text || "Default Advertisement";
+      }
+    } catch (error) {
+      console.error('Error loading current advertisement:', error);
+    }
+  }
+
+  // Preview image when selected
+  adImageInput.addEventListener('change', (event) => {
+    const file = event.target.files[0];
+    if (file) {
+      const reader = new FileReader();
+      reader.onload = (e) => {
+        previewImage.src = e.target.result;
+      };
+      reader.readAsDataURL(file);
+    }
+  });
+
+  // Update preview text
+  adTextInput.addEventListener('input', () => {
+    previewText.textContent = adTextInput.value || "Default Advertisement";
+  });
+
+  // Check if user is authenticated
+  onAuthStateChanged(auth, (user) => {
+    if (!user) {
+      statusMessage.textContent = "Please log in to manage advertisements.";
+      statusMessage.classList.add('error');
+      adTextInput.disabled = true;
+      adImageInput.disabled = true;
+      document.querySelectorAll('button').forEach(btn => btn.disabled = true);
+    } else {
+      loadCurrentAd(); // Load current ad when user is authenticated
+    }
+  });
+
+  // Upload advertisement
+  window.uploadAdvertisement = async () => {
+    const user = auth.currentUser;
+    if (!user) {
+      statusMessage.textContent = "You must be logged in to upload advertisements.";
+      statusMessage.classList.add('error');
+      return;
+    }
+
+    const adText = adTextInput.value;
+    const adImage = adImageInput.files[0];
+
+    if (!adText || !adImage) {
+      statusMessage.textContent = "Please provide both text and an image.";
+      statusMessage.classList.add('error');
+      return;
+    }
+
+    // Validate image size and type
+    if (adImage.size > 5 * 1024 * 1024) {
+      statusMessage.textContent = "Image size must be less than 5MB.";
+      statusMessage.classList.add('error');
+      return;
+    }
+    if (!['image/png', 'image/jpeg'].includes(adImage.type)) {
+      statusMessage.textContent = "Only PNG and JPG images are allowed.";
+      statusMessage.classList.add('error');
+      return;
+    }
+
+    try {
+      // Upload image to Supabase Storage
+      const fileName = `ad_${Date.now()}_${adImage.name}`;
+      const { data, error } = await supabase.storage
+        .from('photosandvideos')
+        .upload(fileName, adImage);
+
+      if (error) {
+        throw new Error(`Supabase upload error: ${error.message}`);
+      }
+
+      // Get public URL of the uploaded image
+      const { data: urlData } = supabase.storage
+        .from('photosandvideos')
+        .getPublicUrl(fileName);
+
+      const imageUrl = urlData.publicUrl;
+
+      // Save advertisement data to Firestore
+      await setDoc(doc(db, 'advertisements', 'currentAd'), {
+        text: adText,
+        imageUrl: imageUrl,
+        imagePath: fileName, // Store file path for deletion
+        timestamp: new Date()
+      });
+
+      statusMessage.textContent = "Advertisement uploaded successfully!";
+      statusMessage.classList.remove('error');
+      statusMessage.classList.add('success');
+
+      // Update preview
+      previewImage.src = imageUrl;
+      previewText.textContent = adText;
+    } catch (error) {
+      console.error('Error uploading advertisement:', error);
+      statusMessage.textContent = "Error uploading advertisement. Please try again.";
+      statusMessage.classList.add('error');
+    }
+  };
+
+  // Delete advertisement
+  window.deleteAdvertisement = async () => {
+    const user = auth.currentUser;
+    if (!user) {
+      statusMessage.textContent = "You must be logged in to delete advertisements.";
+      statusMessage.classList.add('error');
+      return;
+    }
+
+    try {
+      // Get current advertisement data to retrieve image path
+      const adDocRef = doc(db, 'advertisements', 'currentAd');
+      const adDoc = await getDoc(adDocRef);
+      if (adDoc.exists()) {
+        const adData = adDoc.data();
+        const imagePath = adData.imagePath;
+
+        // Delete image from Supabase Storage
+        if (imagePath) {
+          const { error } = await supabase.storage
+            .from('photosandvideos')
+            .remove([imagePath]);
+          if (error) {
+            throw new Error(`Supabase delete error: ${error.message}`);
+          }
+        }
+
+        // Delete Firestore document
+        await deleteDoc(adDocRef);
+
+        // Reset preview
+        previewImage.src = "default-ad.png";
+        previewText.textContent = "Default Advertisement";
+        adTextInput.value = "";
+        adImageInput.value = "";
+
+        statusMessage.textContent = "Advertisement deleted successfully!";
+        statusMessage.classList.remove('error');
+        statusMessage.classList.add('success');
+      } else {
+        statusMessage.textContent = "No advertisement found to delete.";
+        statusMessage.classList.add('error');
+      }
+    } catch (error) {
+      console.error('Error deleting advertisement:', error);
+      statusMessage.textContent = "Error deleting advertisement. Please try again.";
+      statusMessage.classList.add('error');
+    }
+  };
+</script>
+
+</body>
+</html>

@@ -1,0 +1,152 @@
+<!-- chat.html -->
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <title>Private Chat</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <style>
+    body {
+      margin: 0;
+      font-family: Arial, sans-serif;
+      background: #e0e5ec;
+      display: flex;
+      flex-direction: column;
+      height: 100vh;
+    }
+
+    header {
+      padding: 10px 20px;
+      background: #2c3e50;
+      color: white;
+      font-size: 18px;
+    }
+
+    .chat-box {
+      flex-grow: 1;
+      padding: 20px;
+      overflow-y: auto;
+      display: flex;
+      flex-direction: column;
+    }
+
+    .message {
+      max-width: 70%;
+      margin: 5px 0;
+      padding: 10px;
+      border-radius: 10px;
+      background: #fff;
+    }
+
+    .me {
+      align-self: flex-end;
+      background: #d1f2eb;
+    }
+
+    .them {
+      align-self: flex-start;
+      background: #f8d7da;
+    }
+
+    .input-area {
+      display: flex;
+      padding: 10px;
+      background: #fff;
+      border-top: 1px solid #ccc;
+    }
+
+    .input-area input {
+      flex: 1;
+      padding: 10px;
+      font-size: 16px;
+      border: 1px solid #ccc;
+      border-radius: 5px;
+    }
+
+    .input-area button {
+      margin-left: 10px;
+      padding: 10px 15px;
+      font-size: 16px;
+      background: #3498db;
+      color: white;
+      border: none;
+      border-radius: 5px;
+    }
+  </style>
+</head>
+<body>
+  <header>Private Chat</header>
+  <div class="chat-box" id="chatBox"></div>
+  <div class="input-area">
+    <input type="text" id="messageInput" placeholder="Type a message..." />
+    <button onclick="sendMessage()">Send</button>
+  </div>
+
+  <script type="module">
+    import { initializeApp } from "https://www.gstatic.com/firebasejs/11.7.3/firebase-app.js";
+    import { getFirestore, collection, addDoc, query, orderBy, onSnapshot } from "https://www.gstatic.com/firebasejs/11.7.3/firebase-firestore.js";
+    import { getAuth, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/11.7.3/firebase-auth.js";
+
+    const firebaseConfig = {
+      apiKey: "AIzaSyBzVL3wQTFo74QlM_PEE-EbgFEtbqN16oE",
+      authDomain: "signin-cdeed.firebaseapp.com",
+      projectId: "signin-cdeed",
+      storageBucket: "signin-cdeed.firebasestorage.app",
+      messagingSenderId: "481847681739",
+      appId: "1:481847681739:web:13b28ef686bc29f201714e"
+    };
+
+    const app = initializeApp(firebaseConfig);
+    const db = getFirestore(app);
+    const auth = getAuth(app);
+
+    const chatBox = document.getElementById('chatBox');
+    const messageInput = document.getElementById('messageInput');
+
+    const urlParams = new URLSearchParams(window.location.search);
+    const chatId = urlParams.get('chatId');
+    const otherUserId = urlParams.get('userId');
+
+    let currentUserId = null;
+
+    onAuthStateChanged(auth, user => {
+      if (!user) {
+        alert("Please log in");
+        window.location.href = "index.html";
+        return;
+      }
+      currentUserId = user.uid;
+      listenForMessages();
+    });
+
+    async function sendMessage() {
+      const text = messageInput.value.trim();
+      if (!text || !currentUserId) return;
+
+      await addDoc(collection(db, 'chats', chatId, 'messages'), {
+        text,
+        sender: currentUserId,
+        timestamp: Date.now()
+      });
+      messageInput.value = '';
+    }
+
+    function listenForMessages() {
+      const messagesRef = collection(db, 'chats', chatId, 'messages');
+      const q = query(messagesRef, orderBy('timestamp'));
+
+      onSnapshot(q, (snapshot) => {
+        chatBox.innerHTML = '';
+        snapshot.forEach(doc => {
+          const msg = doc.data();
+          const msgDiv = document.createElement('div');
+          msgDiv.className = 'message ' + (msg.sender === currentUserId ? 'me' : 'them');
+          msgDiv.textContent = msg.text;
+          chatBox.appendChild(msgDiv);
+        });
+        chatBox.scrollTop = chatBox.scrollHeight;
+      });
+    }
+  </script>
+</body>
+</html>

@@ -1,0 +1,176 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Admin Panel - Manage YouTube Videos</title>
+    <script type="module">
+        // Import Firebase SDK
+        import { initializeApp } from "https://www.gstatic.com/firebasejs/10.8.1/firebase-app.js";
+        import { getFirestore, collection, addDoc, getDocs, deleteDoc, doc } from "https://www.gstatic.com/firebasejs/10.8.1/firebase-firestore.js";
+
+        // Firebase configuration
+        const firebaseConfig = {
+            apiKey: "AIzaSyAanJ9JJ7wNfha2vX2k0slZF6qcfxNERj0",
+            authDomain: "canvas-55c31.firebaseapp.com",
+            projectId: "canvas-55c31",
+            storageBucket: "canvas-55c31.appspot.com",
+            messagingSenderId: "744324241059",
+            appId: "1:744324241059:web:4914e76d1436bcfc659116",
+            measurementId: "G-NTK4L0L5P8"
+        };
+
+        // Initialize Firebase
+        const app = initializeApp(firebaseConfig);
+        const db = getFirestore(app);
+
+        // Function to add a video
+        window.addVideo = async function () {
+            let url = document.getElementById('videoUrl').value;
+            let videoId = extractYouTubeID(url);
+
+            if (videoId) {
+                await addDoc(collection(db, "videos"), { videoId: videoId });
+                document.getElementById("videoUrl").value = "";  // Clear input field
+                loadVideos();
+            } else {
+                alert("Invalid YouTube URL. Please try again.");
+            }
+        };
+
+        // Function to extract YouTube video ID
+        function extractYouTubeID(url) {
+            let regex = /(?:youtu\.be\/|youtube\.com\/(?:.*v=|.*\/v\/|.*\/embed\/|.*\/shorts\/))([^&?\s]+)/;
+            let match = url.match(regex);
+            return match ? match[1] : null;
+        }
+
+        // Function to load videos from Firebase
+        async function loadVideos() {
+            const videoContainer = document.getElementById("videoList");
+            videoContainer.innerHTML = "";  // Clear existing content
+
+            const querySnapshot = await getDocs(collection(db, "videos"));
+            querySnapshot.forEach((docSnapshot) => {
+                const videoData = docSnapshot.data();
+                const videoId = videoData.videoId;
+                const videoElement = document.createElement("div");
+                videoElement.classList.add("video-item");
+                videoElement.innerHTML = `
+                    <iframe src="https://www.youtube.com/embed/${videoId}" frameborder="0" allowfullscreen></iframe>
+                    <button class="delete-btn" onclick="deleteVideo('${docSnapshot.id}')">Delete</button>
+                `;
+                videoContainer.appendChild(videoElement);
+            });
+        }
+
+        // Function to delete a video
+        window.deleteVideo = async function (videoId) {
+            await deleteDoc(doc(db, "videos", videoId));
+            loadVideos();
+        };
+
+        // Load videos on page load
+        window.onload = loadVideos;
+    </script>
+
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            text-align: center;
+            background-color: #f9f9f9;
+            margin: 0;
+            padding: 0;
+        }
+        /* Back button styling */
+        .back-arrow {
+            position: fixed;
+            top: 15px;
+            left: 15px;
+            font-size: 18px;
+            text-decoration: none;
+            color: #333;
+            background: #fff;
+            padding: 10px 15px;
+            border-radius: 5px;
+            box-shadow: 0px 0px 5px rgba(0, 0, 0, 0.2);
+            cursor: pointer;
+            font-weight: bold;
+            transition: background 0.3s ease, transform 0.2s ease-in-out;
+        }
+        .back-arrow:hover {
+            background: #f1f1f1;
+            transform: scale(1.05);
+        }
+        .container {
+            width: 50%;
+            margin: auto;
+            background: white;
+            padding: 20px;
+            border-radius: 8px;
+            box-shadow: 0px 0px 10px rgba(0, 0, 0, 0.1);
+            margin-top: 60px; /* Added margin to prevent overlap with back arrow */
+        }
+        input {
+            width: 80%;
+            padding: 10px;
+            margin: 10px 0;
+            border: 1px solid #ccc;
+            border-radius: 5px;
+        }
+        button {
+            background-color: #ff0000;
+            color: white;
+            padding: 10px 20px;
+            border: none;
+            border-radius: 5px;
+            cursor: pointer;
+            margin-top: 10px;
+        }
+        button:hover {
+            background-color: #cc0000;
+        }
+        .video-container {
+            display: flex;
+            flex-wrap: wrap;
+            justify-content: center;
+            gap: 20px;
+            margin-top: 20px;
+        }
+        .video-item {
+            background: white;
+            padding: 10px;
+            border-radius: 8px;
+            box-shadow: 0px 0px 10px rgba(0, 0, 0, 0.1);
+            width: 320px;
+            text-align: center;
+        }
+        .video-item iframe {
+            width: 100%;
+            height: 180px;
+            border-radius: 8px;
+        }
+        .delete-btn {
+            background-color: #d9534f;
+            padding: 8px 12px;
+            border-radius: 5px;
+            display: block;
+            margin: 10px auto 0; /* Centering the button */
+            width: 80%;
+        }
+    </style>
+</head>
+<body>
+
+    <!-- Back Button (Fixed in Top-Left Corner) -->
+    <a href="admin_dash.html" class="back-arrow">⬅ Back</a>
+
+    <div class="container">
+        <h2>Admin Panel - Manage YouTube Videos</h2>
+        <input type="text" id="videoUrl" placeholder="Enter YouTube Video URL">
+        <button onclick="addVideo()">Add Video</button>
+        <div class="video-container" id="videoList"></div>
+    </div>
+
+</body>
+</html>

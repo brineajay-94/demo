@@ -1,0 +1,560 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Admin Panel</title>
+    <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+    <script type="module">
+        import { initializeApp } from "https://www.gstatic.com/firebasejs/11.7.3/firebase-app.js";
+        import { getFirestore, doc, getDoc, setDoc, collection, addDoc, query, getDocs } from "https://www.gstatic.com/firebasejs/11.7.3/firebase-firestore.js";
+
+        // Expose Firestore functions to global scope for non-module script
+        window.firestore = {
+            doc,
+            getDoc,
+            setDoc,
+            collection,
+            addDoc,
+            query,
+            getDocs
+        };
+
+        const firebaseConfig = {
+            apiKey: "AIzaSyBzVL3wQTFo74QlM_PEE-EbgFEtbqN16oE",
+            authDomain: "signin-cdeed.firebaseapp.com",
+            projectId: "signin-cdeed",
+            storageBucket: "signin-cdeed.firebasestorage.app",
+            messagingSenderId: "481847681739",
+            appId: "1:481847681739:web:13b28ef686bc29f201714e",
+            measurementId: "G-L8F15D37BE"
+        };
+
+        const app = initializeApp(firebaseConfig);
+        const db = getFirestore(app);
+        window.db = db; // Expose db to global scope
+
+        // Generate or retrieve UUID
+        let uuid = localStorage.getItem('user_uuid');
+        if (!uuid) {
+            uuid = crypto.randomUUID();
+            localStorage.setItem('user_uuid', uuid);
+        }
+        window.currentUser = { uuid };
+
+        // Check for username
+        const userDoc = doc(db, 'users', uuid);
+        getDoc(userDoc).then((snapshot) => {
+            const userData = snapshot.data() || {};
+            const authSection = document.getElementById('authSection');
+            const mainContent = document.getElementById('mainContent');
+            const usernameModal = document.getElementById('usernameModal');
+            if (!userData.username) {
+                usernameModal.style.display = 'flex';
+            } else {
+                window.currentUser.username = userData.username;
+                authSection.innerHTML = `
+                    <div class="user-info">
+                        <span>${userData.username}</span>
+                    </div>
+                `;
+                mainContent.style.display = 'block';
+                window.loadImages();
+            }
+            console.log('Fetched username:', userData.username || 'None', 'UUID:', uuid);
+        }).catch((error) => {
+            alert('Failed to fetch user data: ' + error.message);
+            console.error('Firestore error:', error);
+        });
+
+        window.saveUsername = async () => {
+            const usernameInput = document.getElementById('usernameInput');
+            const username = usernameInput.value.trim();
+            if (!username) {
+                alert('Please enter a username.');
+                return;
+            }
+            if (username.length > 20) {
+                alert('Username must be 20 characters or less.');
+                return;
+            }
+            try {
+                await setDoc(doc(db, 'users', window.currentUser.uuid), {
+                    username: username
+                });
+                window.currentUser.username = username;
+                document.getElementById('usernameModal').style.display = 'none';
+                console.log('Username saved:', username, 'UUID:', window.currentUser.uuid);
+                window.location.reload();
+            } catch (error) {
+                alert('Failed to save username: ' + error.message);
+                console.error('Save username error:', error);
+            }
+        };
+    </script>
+    <script>
+        const { createClient } = supabase;
+        const supabaseClient = createClient(
+            'https://jxfwqcvdmvepfnrfauoe.supabase.co',
+            'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Imp4ZndxY3ZkbXZlcGZucmZhdW9lIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NDc0NDEzNDEsImV4cCI6MjA2MzAxNzM0MX0.JVZdY8iz_fk2KkiufoYbL49VHtblRq5OhA6pPMonWyY'
+        );
+
+        window.uploadImage = async () => {
+            if (!window.currentUser || !window.currentUser.username) {
+                alert('No username set. Please set a username.');
+                return;
+            }
+
+            const fileInput = document.getElementById('imageInput');
+            const files = fileInput.files;
+            if (!files || files.length === 0) {
+                alert('Please select at least one image.');
+                return;
+            }
+
+            // Limit to 10 images
+            if (files.length > 10) {
+                alert('You can upload a maximum of 10 images at once.');
+                return;
+            }
+
+            const uploadPromises = [];
+            for (const file of files) {
+                const fileName = `${Date.now()}_${file.name}`;
+                console.log('Uploading image:', fileName, 'Username:', window.currentUser.username);
+                
+                // Upload to Supabase
+                uploadPromises.push(
+                    supabaseClient.storage
+                        .from('account')
+                        .upload(fileName, file, {
+                            upsert: true,
+                            contentType: file.type
+                        })
+                        .then(async ({ error: uploadError }) => {
+                            if (uploadError) {
+                                console.error('Upload error for', fileName, ':', uploadError);
+                                return { fileName, error: uploadError };
+                            }
+
+                            // Save image info in Firestore
+                            try {
+                                await window.firestore.addDoc(
+                                    window.firestore.collection(window.db, 'users', window.currentUser.uuid, 'images'),
+                                    {
+                                        filename: fileName,
+                                        username: window.currentUser.username
+                                    }
+                                );
+                                console.log('Image info saved in Firestore:', fileName);
+                                return { fileName, error: null };
+                            } catch (error) {
+                                console.error('Firestore save error for', fileName, ':', error);
+                                return { fileName, error };
+                            }
+                        })
+                );
+            }
+
+            // Wait for all uploads to complete
+            const results = await Promise.all(uploadPromises);
+            const errors = results.filter(result => result.error);
+            if (errors.length > 0) {
+                const errorMessages = errors.map(e => `Failed to upload ${e.fileName}: ${e.error.message}`).join('\n');
+                alert(`Some uploads failed:\n${errorMessages}`);
+            } else {
+                alert('All images uploaded successfully!');
+            }
+
+            fileInput.value = '';
+            window.loadImages();
+        };
+
+        window.loadImages = async () => {
+            const { data: files, error: listError } = await supabaseClient.storage
+                .from('account')
+                .list();
+
+            if (listError) {
+                alert('Error loading images: ' + listError.message);
+                console.error('List error:', listError);
+                return;
+            }
+
+            const imageGrid = document.getElementById('imageGrid');
+            imageGrid.innerHTML = '';
+
+            // Fetch all image metadata from Firestore to get usernames
+            const imageMetadata = {};
+            const users = await window.firestore.getDocs(window.firestore.query(window.firestore.collection(window.db, 'users')));
+            for (const userDoc of users.docs) {
+                const images = await window.firestore.getDocs(
+                    window.firestore.query(window.firestore.collection(window.db, 'users', userDoc.id, 'images'))
+                );
+                images.forEach((imageDoc) => {
+                    const data = imageDoc.data();
+                    imageMetadata[data.filename] = data.username;
+                });
+            }
+
+            for (const file of files) {
+                if (file.name === '.') continue;
+                const { publicUrl } = supabaseClient.storage.from('account').getPublicUrl(file.name).data;
+                const username = imageMetadata[file.name] || 'Unknown';
+                console.log(`File: ${file.name}, Username: ${username}`);
+
+                const card = document.createElement('div');
+                card.className = 'image-card';
+                card.innerHTML = `
+                    <img src="${publicUrl}" alt="${file.name}">
+                    <div class="uploader-info">
+                        <p>Uploaded by ${username}</p>
+                    </div>
+                    <button onclick="deleteImage('${file.name}')">Delete</button>
+                `;
+                imageGrid.appendChild(card);
+            }
+            console.log('Images loaded:', files.length);
+        };
+
+        window.deleteImage = async (fileName) => {
+            if (!window.currentUser) {
+                alert('User not identified.');
+                return;
+            }
+
+            if (confirm('Are you sure you want to delete this image?')) {
+                const { error: storageError } = await supabaseClient.storage
+                    .from('account')
+                    .remove([fileName]);
+
+                if (storageError) {
+                    alert('Delete failed: ' + storageError.message);
+                    console.error('Delete error:', storageError);
+                    return;
+                }
+
+                alert('Image deleted successfully!');
+                console.log('Image deleted:', fileName);
+                window.loadImages();
+            }
+        };
+
+        window.deleteAllImages = async () => {
+            if (!window.currentUser) {
+                alert('User not identified.');
+                return;
+            }
+
+            if (confirm('Are you sure you want to delete ALL images?')) {
+                const { data: files, error: listError } = await supabaseClient.storage
+                    .from('account')
+                    .list();
+
+                if (listError) {
+                    alert('Error loading images: ' + listError.message);
+                    console.error('List error:', listError);
+                    return;
+                }
+
+                const fileNames = files.filter(file => file.name !== '.').map(file => file.name);
+                if (fileNames.length === 0) {
+                    alert('No images to delete.');
+                    return;
+                }
+
+                const { error: storageError } = await supabaseClient.storage
+                    .from('account')
+                    .remove(fileNames);
+
+                if (storageError) {
+                    alert('Delete failed: ' + storageError.message);
+                    console.error('Delete error:', storageError);
+                    return;
+                }
+
+                alert('All images deleted successfully!');
+                console.log('All images deleted:', fileNames);
+                window.loadImages();
+            }
+        };
+    </script>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+            font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+        }
+
+        body {
+            min-height: 100vh;
+            background: linear-gradient(135deg, #e0e7ff, #c3cfe2);
+            padding: 20px;
+            overflow-x: hidden;
+        }
+
+        .container {
+            max-width: 1200px;
+            margin: 0 auto;
+        }
+
+        .home-icon {
+            position: fixed;
+            top: 20px;
+            left: 20px;
+            background: rgba(255, 255, 255, 0.25);
+            border-radius: 12px;
+            padding: 12px;
+            backdrop-filter: blur(12px);
+            box-shadow: 0 6px 20px rgba(0, 0, 0, 0.15);
+            transition: all 0.3s ease;
+            z-index: 1000;
+        }
+
+        .home-icon:hover {
+            transform: translateY(-2px);
+            background: rgba(255, 255, 255, 0.35);
+        }
+
+        .home-icon img {
+            width: 28px;
+            height: 28px;
+        }
+
+        .auth-section {
+            position: fixed;
+            top: 20px;
+            right: 20px;
+            display: flex;
+            align-items: center;
+            gap: 12px;
+        }
+
+        .user-info {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            background: rgba(255, 255, 255, 0.25);
+            border-radius: 12px;
+            padding: 8px 12px;
+            backdrop-filter: blur(12px);
+            box-shadow: 0 6px 20px rgba(0, 0, 0, 0.15);
+        }
+
+        .user-info span {
+            color: #1f2937;
+            font-size: 0.9rem;
+            font-weight: 500;
+        }
+
+        .modal {
+            display: none;
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: rgba(0, 0, 0, 0.5);
+            align-items: center;
+            justify-content: center;
+            z-index: 2000;
+        }
+
+        .modal-content {
+            background: rgba(255, 255, 255, 0.2);
+            border-radius: 16px;
+            padding: 24px;
+            backdrop-filter: blur(12px);
+            box-shadow: 0 10px 40px rgba(0, 0, 0, 0.15);
+            border: 1px solid rgba(255, 255, 255, 0.4);
+            text-align: center;
+            max-width: 400px;
+            width: 90%;
+        }
+
+        .modal-content h2 {
+            color: #1f2937;
+            font-size: 1.25rem;
+            margin-bottom: 16px;
+        }
+
+        .modal-content input {
+            width: 100%;
+            padding: 12px;
+            margin-bottom: 16px;
+            border: none;
+            border-radius: 10px;
+            background: rgba(255, 255, 255, 0.3);
+            color: #1f2937;
+            font-size: 1rem;
+        }
+
+        .modal-content button {
+            padding: 12px 24px;
+            border: none;
+            border-radius: 10px;
+            background: rgba(255, 255, 255, 0.3);
+            color: #1f2937;
+            font-size: 1rem;
+            cursor: pointer;
+            transition: all 0.3s ease;
+        }
+
+        .modal-content button:hover {
+            background: rgba(255, 255, 255, 0.5);
+            transform: translateY(-1px);
+        }
+
+        .section {
+            background: rgba(255, 255, 255, 0.2);
+            border-radius: 20px;
+            padding: 24px;
+            margin-bottom: 24px;
+            backdrop-filter: blur(12px);
+            box-shadow: 0 10px 40px rgba(0, 0, 0, 0.15);
+            border: 1px solid rgba(255, 255, 255, 0.4);
+        }
+
+        h2 {
+            color: #1f2937;
+            font-size: 1.5rem;
+            font-weight: 600;
+            margin-bottom: 16px;
+        }
+
+        .upload-section {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 12px;
+            align-items: center;
+        }
+
+        .upload-section input,
+        .upload-section button,
+        .delete-all-btn {
+            padding: 12px 20px;
+            border: none;
+            border-radius: 10px;
+            font-size: 0.95rem;
+            cursor: pointer;
+            transition: all 0.3s ease;
+            background: rgba(255, 255, 255, 0.3);
+            color: #1f2937;
+        }
+
+        .upload-section input {
+            background: none;
+        }
+
+        .upload-section button:hover,
+        .delete-all-btn:hover {
+            background: rgba(255, 255, 255, 0.5);
+            transform: translateY(-1px);
+        }
+
+        .image-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+            gap: 20px;
+        }
+
+        .image-card {
+            background: rgba(255, 255, 255, 0.25);
+            border-radius: 16px;
+            padding: 16px;
+            text-align: center;
+            backdrop-filter: blur(12px);
+            box-shadow: 0 6px 20px rgba(0, 0, 0, 0.1);
+            transition: transform 0.3s ease;
+        }
+
+        .image-card:hover {
+            transform: translateY(-4px);
+        }
+
+        .image-card img {
+            max-width: 100%;
+            border-radius: 10px;
+            margin-bottom: 12px;
+        }
+
+        .uploader-info {
+            margin-bottom: 12px;
+        }
+
+        .uploader-info p {
+            font-size: 0.85rem;
+            color: #1f2937;
+        }
+
+        .image-card button {
+            background: rgba(239, 68, 68, 0.3);
+            border: none;
+            padding: 10px;
+            border-radius: 10px;
+            color: #fff;
+            font-size: 0.9rem;
+            cursor: pointer;
+            transition: all 0.3s ease;
+        }
+
+        .image-card button:hover {
+            background: rgba(239, 68, 68, 0.5);
+        }
+
+        @media (max-width: 768px) {
+            .section {
+                padding: 16px;
+            }
+
+            .image-grid {
+                grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+            }
+
+            .upload-section {
+                flex-direction: column;
+                align-items: stretch;
+            }
+
+            .auth-section {
+                top: 80px;
+                right: 20px;
+                flex-direction: column;
+                align-items: flex-end;
+            }
+        }
+
+        @media (max-width: 480px) {
+            .image-grid {
+                grid-template-columns: 1fr;
+            }
+        }
+    </style>
+</head>
+<body>
+    <a href="dash.html" class="home-icon">
+        <img src="https://img.icons8.com/ios-filled/50/000000/home.png" alt="Home">
+    </a>
+    <div class="auth-section" id="authSection"></div>
+    <div class="container" id="mainContent">
+        <div class="section upload-section">
+            <h2>Upload Images (Up to 10)</h2>
+            <input type="file" id="imageInput" accept="image/*" multiple>
+            <button onclick="uploadImage()">Upload</button>
+        </div>
+        <div class="section">
+            <h2>Image Preview</h2>
+            <button class="delete-all-btn" onclick="deleteAllImages()">Delete All Images</button>
+            <div class="image-grid" id="imageGrid"></div>
+        </div>
+    </div>
+    <div class="modal" id="usernameModal">
+        <div class="modal-content">
+            <h2>Choose a Username</h2>
+            <input type="text" id="usernameInput" placeholder="Enter your username" maxlength="20">
+            <button onclick="saveUsername()">Save</button>
+        </div>
+    </div>
+</body>
+</html>

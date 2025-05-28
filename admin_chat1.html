@@ -1,0 +1,165 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Users</title>
+    <style>
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+            background-color: #f0f2f5;
+            margin: 0;
+            padding: 20px;
+        }
+        h1 {
+            text-align: center;
+            color: #333;
+            font-size: 24px;
+            margin-bottom: 20px;
+        }
+        .user-container {
+            max-width: 600px;
+            margin: 0 auto;
+            background-color: white;
+            border-radius: 10px;
+            box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+            overflow: hidden;
+        }
+        .user-item {
+            display: flex;
+            align-items: center;
+            padding: 10px 15px;
+            border-bottom: 1px solid #eee;
+            transition: background-color 0.2s;
+        }
+        .user-item:hover {
+            background-color: #f8f9fa;
+        }
+        .user-item img {
+            width: 40px;
+            height: 40px;
+            border-radius: 50%;
+            object-fit: cover;
+            margin-right: 15px;
+        }
+        .user-item span {
+            flex-grow: 1;
+            font-size: 16px;
+            color: #333;
+        }
+        .user-item button {
+            background-color: #ff4d4d;
+            color: white;
+            border: none;
+            padding: 6px 12px;
+            border-radius: 5px;
+            cursor: pointer;
+            font-size: 14px;
+        }
+        .user-item button:hover {
+            background-color: #cc0000;
+        }
+        .error, .message {
+            text-align: center;
+            margin: 20px 0;
+            font-size: 16px;
+        }
+        .error { color: #ff4d4d; }
+        .message { color: #28a745; }
+    </style>
+</head>
+<body>
+    <h1>Users</h1>
+    <div id="userContainer" class="user-container"></div>
+    <p id="errorMessage" class="error"></p>
+    <p id="successMessage" class="message"></p>
+
+    <!-- Firebase SDK -->
+    <script type="module">
+        import { initializeApp } from "https://www.gstatic.com/firebasejs/11.7.3/firebase-app.js";
+        import { getFirestore, collection, getDocs, deleteDoc, doc } from "https://www.gstatic.com/firebasejs/11.7.3/firebase-firestore.js";
+
+        // Firebase configuration
+        const firebaseConfig = {
+            apiKey: "AIzaSyBzVL3wQTFo74QlM_PEE-EbgFEtbqN16oE",
+            authDomain: "signin-cdeed.firebaseapp.com",
+            projectId: "signin-cdeed",
+            storageBucket: "signin-cdeed.appspot.com",
+            messagingSenderId: "481847681739",
+            appId: "1:481847681739:web:13b28ef686bc29f201714e",
+            measurementId: "G-L8F15D37BE"
+        };
+
+        // Initialize Firebase
+        const app = initializeApp(firebaseConfig);
+        const db = getFirestore(app);
+
+        // Function to fetch and display users
+        async function displayUsers() {
+            const userContainer = document.getElementById('userContainer');
+            const errorMessage = document.getElementById('errorMessage');
+
+            try {
+                const querySnapshot = await getDocs(collection(db, 'users'));
+                userContainer.innerHTML = '';
+                errorMessage.textContent = '';
+
+                if (querySnapshot.empty) {
+                    errorMessage.textContent = 'No users found.';
+                    return;
+                }
+
+                querySnapshot.forEach((docSnap) => {
+                    const userData = docSnap.data();
+                    const username = userData.username || 'Unknown';
+                    const profilePicUrl = userData.profilePicUrl || 'https://via.placeholder.com/40';
+                    const userId = docSnap.id;
+
+                    const userItem = document.createElement('div');
+                    userItem.className = 'user-item';
+                    userItem.innerHTML = `
+                        <img src="${profilePicUrl}" alt="${username}'s profile picture">
+                        <span>${username}</span>
+                        <button onclick="deleteUser('${userId}')">Delete</button>
+                    `;
+                    userContainer.appendChild(userItem);
+                });
+            } catch (error) {
+                console.error('Error fetching users:', error);
+                errorMessage.textContent = `Error loading users: ${error.message}`;
+            }
+        }
+
+        // Function to delete user data
+        async function deleteUser(userId) {
+            const errorMessage = document.getElementById('errorMessage');
+            const successMessage = document.getElementById('successMessage');
+
+            if (!userId) {
+                errorMessage.textContent = 'Invalid user ID.';
+                console.error('Invalid userId:', userId);
+                return;
+            }
+
+            if (!confirm(`Are you sure you want to delete user ID: ${userId}?`)) return;
+
+            try {
+                await deleteDoc(doc(db, 'users', userId));
+                successMessage.textContent = `User ${userId} deleted successfully.`;
+                errorMessage.textContent = '';
+                displayUsers();
+            } catch (error) {
+                console.error('Error deleting user:', error);
+                errorMessage.textContent = `Error deleting user: ${error.message}`;
+                successMessage.textContent = '';
+            }
+        }
+
+        // Expose deleteUser to global scope
+        window.deleteUser = deleteUser;
+
+        // Load users when page loads
+        document.addEventListener('DOMContentLoaded', displayUsers);
+    </script>
+</body>
+</html>
